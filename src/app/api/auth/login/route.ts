@@ -3,7 +3,7 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/db/mongodb";
 import { AdminUser } from "@/models/AdminUser";
 import { SecurityEvent } from "@/models/SecurityEvent";
-import { verifyPassword } from "@/lib/auth/password";
+import { verifyPassword, PasswordVerificationError } from "@/lib/auth/password";
 import { createDatabaseSession } from "@/lib/auth/session";
 import { createMfaChallengeToken } from "@/lib/auth/mfa-challenge";
 import { generateTotpSetup } from "@/lib/auth/totp";
@@ -75,10 +75,27 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = parsed.data.email.trim().toLowerCase();
 
-    await connectToDatabase();
+    try {
+      await connectToDatabase();
+    } catch (dbErr: any) {
+      console.error(`[AUTH_DB_CONNECTION_FAILED] Database connection error: ${dbErr?.name || "UnknownError"}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "SERVER_ERROR",
+            message: "An internal authentication error occurred.",
+          },
+        },
+        { status: 500 }
+      );
+    }
+
     const user = await AdminUser.findOne({ normalizedEmail });
 
     if (!user) {
+      console.warn(`[AUTH_USER_NOT_FOUND] Login attempt failed: account not found for domain @${normalizedEmail.split("@")[1] || "unknown"}`);
+
       // Record failed attempt
       await SecurityEvent.create({
         actorEmail: normalizedEmail,
@@ -103,6 +120,7 @@ export async function POST(req: NextRequest) {
 
     // Check account status
     if (user.status === "INVITED") {
+      console.warn(`[AUTH_ACCOUNT_INACTIVE] Login blocked for user ${user._id}: account status is INVITED`);
       return NextResponse.json(
         {
           success: false,
@@ -116,6 +134,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (user.status === "SUSPENDED" || user.status === "DEACTIVATED") {
+      console.warn(`[AUTH_ACCOUNT_INACTIVE] Login blocked for user ${user._id}: account status is ${user.status}`);
       return NextResponse.json(
         {
           success: false,
@@ -130,6 +149,7 @@ export async function POST(req: NextRequest) {
 
     // Check lockUntil
     if (user.lockUntil && user.lockUntil.getTime() > Date.now()) {
+      console.warn(`[AUTH_ACCOUNT_INACTIVE] Login blocked for user ${user._id}: account is locked until ${user.lockUntil.toISOString()}`);
       return NextResponse.json(
         {
           success: false,
@@ -143,8 +163,25 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify Argon2id password
-    const isPasswordValid = await verifyPassword(parsed.data.password, user.passwordHash);
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await verifyPassword(parsed.data.password, user.passwordHash);
+    } catch (pwErr: any) {
+      console.error(`[AUTH_PASSWORD_RUNTIME_ERROR] Password verification subsystem failure for user ${user._id}: ${pwErr?.message || "Subsystem error"}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "SERVER_ERROR",
+            message: "An internal authentication error occurred.",
+          },
+        },
+        { status: 500 }
+      );
+    }
+
     if (!isPasswordValid) {
+      console.warn(`[AUTH_PASSWORD_VERIFICATION_FAILED] Password verification mismatch for user ${user._id}`);
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= 5) {
         user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
@@ -225,7 +262,21 @@ export async function POST(req: NextRequest) {
     user.lastLoginIp = ip;
     await user.save();
 
-    await createDatabaseSession(user, { ipAddress: ip, userAgent });
+    try {
+      await createDatabaseSession(user, { ipAddress: ip, userAgent });
+    } catch (sessErr: any) {
+      console.error(`[AUTH_SESSION_CREATION_FAILED] Session creation error for user ${user._id}: ${sessErr?.name || "SessionError"}`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "SERVER_ERROR",
+            message: "An internal authentication error occurred.",
+          },
+        },
+        { status: 500 }
+      );
+    }
 
     await SecurityEvent.create({
       actorUserId: user._id,

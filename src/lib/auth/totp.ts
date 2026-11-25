@@ -57,7 +57,14 @@ export async function generateTotpSetup(email: string): Promise<TotpSetupResult>
  */
 export function verifyTotpToken(encryptedSecret: string, token: string): boolean {
   try {
-    const secretBase32 = decryptMfaSecret(encryptedSecret);
+    let secretBase32: string;
+    try {
+      secretBase32 = decryptMfaSecret(encryptedSecret);
+    } catch (decryptErr: any) {
+      console.error("[AUTH_MFA_DECRYPTION_FAILED] Unable to decrypt MFA secret with active MFA_ENCRYPTION_KEY:", decryptErr?.name || "DecryptionError");
+      return false;
+    }
+
     const totp = new TOTP({
       issuer: "Mobile Tyre Champions CRM",
       algorithm: "SHA1",
@@ -69,8 +76,8 @@ export function verifyTotpToken(encryptedSecret: string, token: string): boolean
     // delta returns null if invalid, or integer offset (e.g. 0, -1, 1) if valid
     const delta = totp.validate({ token: token.trim(), window: 1 });
     return delta !== null;
-  } catch (err) {
-    console.error("[TOTP Verification Error]", err);
+  } catch (err: any) {
+    console.error("[AUTH_MFA_VERIFICATION_FAILED] TOTP verification subsystem error:", err?.name || "TotpError");
     return false;
   }
 }
