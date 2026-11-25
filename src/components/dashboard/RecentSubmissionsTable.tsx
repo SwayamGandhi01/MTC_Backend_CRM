@@ -14,15 +14,17 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./StatusBadge";
 import { RecentSubmissionItem } from "@/types/dashboard";
 import { formatUKDateTime } from "@/lib/utils";
-import { ArrowUpRight, Phone, Car, MapPin, Search } from "lucide-react";
+import { ArrowUpRight, Phone, MapPin } from "lucide-react";
 import Link from "next/link";
 
 interface RecentSubmissionsTableProps {
-  submissions: RecentSubmissionItem[];
+  submissions?: RecentSubmissionItem[];
+  loading?: boolean;
 }
 
 export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
-  submissions,
+  submissions = [],
+  loading = false,
 }) => {
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
@@ -94,10 +96,50 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              // Loading Skeleton Rows
+              Array.from({ length: 4 }).map((_, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>
+                    <div className="h-4 w-32 bg-slate-200 rounded animate-pulse mb-1.5" />
+                    <div className="h-3 w-24 bg-slate-100 rounded animate-pulse" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-28 bg-slate-200 rounded animate-pulse mb-1.5" />
+                    <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-36 bg-slate-200 rounded animate-pulse" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-16 bg-slate-100 rounded animate-pulse" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-5 w-16 bg-slate-200 rounded-full animate-pulse" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="h-7 w-14 bg-slate-100 rounded ml-auto animate-pulse" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-slate-400">
-                  No submissions match the selected filter.
+                <TableCell colSpan={7} className="text-center py-12 text-slate-400">
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <p className="text-sm font-semibold text-slate-600">
+                      {submissions.length === 0
+                        ? "No customer submissions found in database"
+                        : "No submissions match the selected filter"}
+                    </p>
+                    <p className="text-xs text-slate-400 max-w-sm">
+                      {submissions.length === 0
+                        ? "New customer bookings, roadside emergency requests, and tyre quote enquiries submitted via the website will appear here in real-time."
+                        : "Try selecting 'All Submissions' to view all activity across channels."}
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -131,17 +173,17 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
 
                   <TableCell>
                     {item.vehicleReg ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 border border-yellow-300 rounded font-mono font-bold text-xs text-slate-900 tracking-wider">
+                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
                         {item.vehicleReg}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400 font-medium">N/A</span>
+                      <span className="text-xs text-slate-400">—</span>
                     )}
                   </TableCell>
 
                   <TableCell>
                     <span className="text-xs text-slate-600 font-medium">
-                      {item.timingSlot || "Flexible"}
+                      {item.timingSlot || "Scheduled"}
                     </span>
                   </TableCell>
 
@@ -153,9 +195,17 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
                   </TableCell>
 
                   <TableCell className="text-right">
-                    <Link href={`/appointments?id=${item.id}`}>
-                      <Button variant="ghost" size="sm" className="h-8 px-2.5 font-bold text-xs hover:text-brand-orange">
-                        Triage
+                    <Link
+                      href={
+                        item.type === "appointment" || item.type === "emergency"
+                          ? `/appointments?id=${item.id}`
+                          : item.type === "contact"
+                          ? `/enquiries`
+                          : `/appointments`
+                      }
+                    >
+                      <Button variant="ghost" size="sm" className="h-8 text-xs font-bold text-brand-blue hover:text-brand-navy">
+                        View
                       </Button>
                     </Link>
                   </TableCell>

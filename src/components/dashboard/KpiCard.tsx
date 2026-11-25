@@ -8,7 +8,6 @@ import {
   Star,
   TrendingUp,
   TrendingDown,
-  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +51,32 @@ const COLOR_VARIANTS = {
   },
 };
 
-export const KpiCard: React.FC<{ metric: KpiMetric }> = ({ metric }) => {
+export interface KpiCardProps {
+  metric?: KpiMetric;
+  loading?: boolean;
+}
+
+export const KpiCard: React.FC<KpiCardProps> = ({ metric, loading = false }) => {
+  if (loading || !metric) {
+    return (
+      <Card className="relative overflow-hidden border-slate-200 bg-white">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="h-3.5 w-28 bg-slate-200 rounded animate-pulse" />
+            <div className="h-9 w-9 rounded-xl bg-slate-100 animate-pulse" />
+          </div>
+
+          <div className="mt-4 flex items-baseline gap-2">
+            <div className="h-9 w-16 bg-slate-200 rounded-md animate-pulse" />
+            <div className="h-5 w-20 bg-slate-100 rounded-full animate-pulse" />
+          </div>
+
+          <div className="mt-3 h-3 w-40 bg-slate-100 rounded animate-pulse" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   const IconComponent = ICON_MAP[metric.iconName] || Activity;
   const colors = COLOR_VARIANTS[metric.colorScheme] || COLOR_VARIANTS.navy;
 

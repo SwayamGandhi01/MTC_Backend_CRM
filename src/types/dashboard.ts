@@ -26,7 +26,7 @@ export interface RecentSubmissionItem {
   vehicleReg?: string;
   postcode: string;
   serviceType: ServiceType | string;
-  status: BookingStatus;
+  status: BookingStatus | string;
   submittedAt: string;
   timingSlot?: string;
 }

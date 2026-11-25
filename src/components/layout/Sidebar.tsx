@@ -24,6 +24,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export interface SidebarBadgeCounts {
+  appointments?: number;
+  customers?: number;
+  enquiries?: number;
+}
+
 export interface NavItem {
   title: string;
   href: string;
@@ -32,6 +38,7 @@ export interface NavItem {
   badgeColor?: "orange" | "blue" | "gray";
   group?: string;
   permission?: string;
+  badgeKey?: "appointments" | "customers" | "enquiries";
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -46,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Appointments",
     href: "/appointments",
     icon: CalendarCheck,
-    badge: "7",
+    badgeKey: "appointments",
     badgeColor: "orange",
     group: "Core Operations",
   },
@@ -54,7 +61,7 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Customers",
     href: "/customers",
     icon: Users,
-    badge: "148",
+    badgeKey: "customers",
     badgeColor: "blue",
     group: "Core Operations",
   },
@@ -62,7 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Enquiries",
     href: "/enquiries",
     icon: MessageSquare,
-    badge: "12",
+    badgeKey: "enquiries",
     badgeColor: "blue",
     group: "Core Operations",
   },
@@ -76,8 +83,6 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Technicians & Vans",
     href: "/technicians",
     icon: Truck,
-    badge: "4 Active",
-    badgeColor: "blue",
     group: "Core Operations",
   },
 
@@ -92,8 +97,6 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Google Reviews",
     href: "/reviews",
     icon: Star,
-    badge: "4.9 ★",
-    badgeColor: "gray",
     group: "Communications",
   },
 
@@ -114,8 +117,6 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Locations & Zones",
     href: "/locations",
     icon: MapPin,
-    badge: "62",
-    badgeColor: "gray",
     group: "Content & Catalog",
   },
   {
@@ -146,12 +147,17 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-interface SidebarProps {
+export interface SidebarProps {
   className?: string;
   userPermissions?: string[];
+  badgeCounts?: SidebarBadgeCounts;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ className, userPermissions }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  className,
+  userPermissions,
+  badgeCounts,
+}) => {
   const pathname = usePathname();
 
   const visibleItems =
@@ -209,6 +215,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, userPermissions }) 
                 const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
                 const Icon = item.icon;
 
+                // Determine dynamic badge strictly from authoritative database counts
+                let displayBadge: string | number | undefined = undefined;
+                if (item.badgeKey && badgeCounts) {
+                  const count = badgeCounts[item.badgeKey];
+                  if (count !== undefined && count > 0) {
+                    displayBadge = count > 999 ? "999+" : count;
+                  }
+                }
+
                 return (
                   <Link
                     key={item.href}
@@ -232,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, userPermissions }) 
                       <span>{item.title}</span>
                     </div>
 
-                    {item.badge && (
+                    {displayBadge !== undefined && (
                       <span
                         className={cn(
                           "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
@@ -241,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, userPermissions }) 
                           item.badgeColor === "gray" && "bg-slate-800 text-slate-400"
                         )}
                       >
-                        {item.badge}
+                        {displayBadge}
                       </span>
                     )}
                   </Link>

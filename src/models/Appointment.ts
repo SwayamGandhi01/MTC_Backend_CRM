@@ -44,6 +44,11 @@ export interface IAppointment extends Document {
   priceQuote?: number;
   notes?: string;
   sourcePage?: string;
+  source?: string;
+  sourceSystem?: string;
+  externalId?: string;
+  eventId?: string;
+  receivedAt?: Date;
   statusHistory: IStatusHistoryItem[];
   idempotencyKey?: string;
   createdAt: Date;
@@ -189,6 +194,29 @@ const AppointmentSchema = new Schema<IAppointment>(
     sourcePage: {
       type: String,
       default: "/booking",
+    },
+    source: {
+      type: String,
+      default: "crm",
+      index: true,
+    },
+    sourceSystem: {
+      type: String,
+      default: "crm",
+      index: true,
+    },
+    externalId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
+    eventId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
+    receivedAt: {
+      type: Date,
     },
     statusHistory: {
       type: [StatusHistorySchema],

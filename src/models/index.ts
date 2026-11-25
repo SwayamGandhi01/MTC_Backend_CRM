@@ -19,3 +19,5 @@ export * from "./Appointment";
 export * from "./Enquiry";
 export * from "./CallbackRequest";
 export * from "./AvailabilityRequest";
+export * from "./BusinessEvent";
+export * from "./StrapiWebhookLog";

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/roles";
-import { connectToDatabase } from "@/lib/db/mongodb";
+import { connectToDatabase, getConnectionStatus, classifyMongoError } from "@/lib/db/mongodb";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -18,14 +20,16 @@ export async function GET() {
       );
     }
 
-    const mongoose = await connectToDatabase();
-    const db = mongoose.connection.db;
+    const startTime = Date.now();
+    const mongooseInstance = await connectToDatabase({ silent: true });
+    const db = mongooseInstance.connection.db;
 
     if (!db) {
+      const status = getConnectionStatus();
       return NextResponse.json(
         {
           success: false,
-          database: process.env.MONGODB_DB_NAME || "mtc_crm",
+          database: status.database,
           status: "disconnected",
           message: "Database instance is unavailable.",
         },
@@ -35,22 +39,28 @@ export async function GET() {
 
     // Perform real admin ping
     await db.admin().ping();
-
-    const dbName = mongoose.connection.name || process.env.MONGODB_DB_NAME || "mtc_crm";
+    const latencyMs = Date.now() - startTime;
+    const status = getConnectionStatus();
 
     return NextResponse.json({
       success: true,
-      database: dbName,
+      database: status.database,
       status: "connected",
+      host: status.host,
+      latencyMs,
       message: "MongoDB Atlas connection is healthy",
     });
   } catch (error: any) {
+    const classified = classifyMongoError(error);
+    const status = getConnectionStatus();
+
     return NextResponse.json(
       {
         success: false,
-        database: process.env.MONGODB_DB_NAME || "mtc_crm",
+        database: status.database,
         status: "disconnected",
-        message: "MongoDB Atlas connection is unavailable.",
+        message: classified.reason,
+        code: classified.code,
       },
       { status: 503 }
     );

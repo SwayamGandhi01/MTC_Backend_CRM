@@ -1,15 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, SidebarBadgeCounts } from "./Sidebar";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface MobileNavProps {
   userPermissions?: string[];
+  badgeCounts?: SidebarBadgeCounts;
 }
 
-export const MobileNav: React.FC<MobileNavProps> = ({ userPermissions }) => {
+export const MobileNav: React.FC<MobileNavProps> = ({ userPermissions, badgeCounts }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -41,7 +42,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userPermissions }) => {
             >
               <X className="h-5 w-5" />
             </button>
-            <Sidebar className="w-full h-full border-none" userPermissions={userPermissions} />
+            <Sidebar
+              className="w-full h-full border-none"
+              userPermissions={userPermissions}
+              badgeCounts={badgeCounts}
+            />
           </div>
         </div>
       )}

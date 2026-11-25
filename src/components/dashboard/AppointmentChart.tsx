@@ -11,14 +11,44 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 
 interface AppointmentChartProps {
-  data: ActivityDataPoint[];
+  data?: ActivityDataPoint[];
+  loading?: boolean;
 }
 
-export const AppointmentChart: React.FC<AppointmentChartProps> = ({ data }) => {
+export const AppointmentChart: React.FC<AppointmentChartProps> = ({ data, loading = false }) => {
+  if (loading || !data) {
+    return (
+      <Card className="col-span-full xl:col-span-8">
+        <CardHeader className="flex flex-row items-center justify-between pb-4">
+          <div className="space-y-2">
+            <div className="h-5 w-48 bg-slate-200 rounded animate-pulse" />
+            <div className="h-3 w-72 bg-slate-100 rounded animate-pulse" />
+          </div>
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="h-4 w-20 bg-slate-100 rounded animate-pulse" />
+            <div className="h-4 w-20 bg-slate-100 rounded animate-pulse" />
+            <div className="h-4 w-20 bg-slate-100 rounded animate-pulse" />
+          </div>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <div className="h-[310px] w-full flex items-center justify-center bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-8 w-8 rounded-full border-2 border-slate-300 border-t-brand-navy animate-spin" />
+              <span className="text-xs font-semibold text-slate-400">Loading booking velocity trends...</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const hasActivity = data.some(
+    (d) => (d.appointments || 0) > 0 || (d.emergency || 0) > 0 || (d.enquiries || 0) > 0
+  );
+
   return (
     <Card className="col-span-full xl:col-span-8">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -45,7 +75,7 @@ export const AppointmentChart: React.FC<AppointmentChartProps> = ({ data }) => {
       </CardHeader>
 
       <CardContent className="pt-2">
-        <div className="h-[310px] w-full">
+        <div className="h-[310px] w-full relative">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={data}
@@ -74,6 +104,7 @@ export const AppointmentChart: React.FC<AppointmentChartProps> = ({ data }) => {
                 tick={{ fill: "#64748B", fontSize: 12, fontWeight: 500 }}
               />
               <YAxis
+                allowDecimals={false}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fill: "#64748B", fontSize: 12 }}
@@ -132,6 +163,14 @@ export const AppointmentChart: React.FC<AppointmentChartProps> = ({ data }) => {
               />
             </AreaChart>
           </ResponsiveContainer>
+
+          {!hasActivity && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-[1px]">
+              <span className="text-xs font-semibold text-slate-400 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-xs">
+                Zero recorded activity in the last 7 days
+              </span>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

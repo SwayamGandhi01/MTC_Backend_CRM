@@ -24,6 +24,11 @@ export interface ICallbackRequest extends Document {
   notes?: string;
   status: CallbackStatus;
   sourcePage?: string;
+  source?: string;
+  sourceSystem?: string;
+  externalId?: string;
+  eventId?: string;
+  receivedAt?: Date;
   statusHistory: ICallbackStatusHistory[];
   idempotencyKey?: string;
   createdAt: Date;
@@ -110,6 +115,29 @@ const CallbackRequestSchema = new Schema<ICallbackRequest>(
     sourcePage: {
       type: String,
       default: "/find-tyres",
+    },
+    source: {
+      type: String,
+      default: "crm",
+      index: true,
+    },
+    sourceSystem: {
+      type: String,
+      default: "crm",
+      index: true,
+    },
+    externalId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
+    eventId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
+    receivedAt: {
+      type: Date,
     },
     statusHistory: {
       type: [CallbackStatusHistorySchema],
