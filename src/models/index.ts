@@ -21,3 +21,4 @@ export * from "./CallbackRequest";
 export * from "./AvailabilityRequest";
 export * from "./BusinessEvent";
 export * from "./StrapiWebhookLog";
+export * from "./ResendSyncLog";

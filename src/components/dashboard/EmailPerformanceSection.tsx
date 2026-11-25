@@ -412,10 +412,22 @@ export const EmailPerformanceSection: React.FC<EmailPerformanceSectionProps> = (
 
                     {/* Subject & Template */}
                     <TableCell>
-                      <div className="text-xs font-bold text-brand-navy max-w-xs truncate" title={item.subject}>
-                        {item.subject}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-brand-navy max-w-xs truncate" title={item.subject}>
+                          {item.subject}
+                        </span>
+                        {item.origin === "resend_import" && (
+                          <span className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-200/80 px-1.5 py-0.2 rounded shrink-0">
+                            Resend History
+                          </span>
+                        )}
+                        {item.origin === "legacy" && (
+                          <span className="text-[9px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded shrink-0">
+                            Legacy
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[11px] text-slate-400 font-mono">
+                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                         template: {item.templateName}
                       </div>
                     </TableCell>

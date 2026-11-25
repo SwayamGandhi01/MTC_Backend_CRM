@@ -20,7 +20,10 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const statusFilter = url.searchParams.get("status");
+  const originFilter = url.searchParams.get("origin");
   const search = url.searchParams.get("search");
+  const startDate = url.searchParams.get("startDate");
+  const endDate = url.searchParams.get("endDate");
   const page = parseInt(url.searchParams.get("page") || "1", 10);
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "25", 10), 100);
   const skip = (page - 1) * limit;
@@ -31,6 +34,20 @@ export async function GET(req: NextRequest) {
     query.status = { $regex: new RegExp(`^${statusFilter}$`, "i") };
   }
 
+  if (originFilter && originFilter !== "all") {
+    if (originFilter === "legacy") {
+      query.$or = [{ origin: "legacy" }, { resendMessageId: { $exists: false } }];
+    } else {
+      query.origin = originFilter;
+    }
+  }
+
+  if (startDate || endDate) {
+    query.sentAt = {};
+    if (startDate) query.sentAt.$gte = new Date(startDate);
+    if (endDate) query.sentAt.$lte = new Date(endDate);
+  }
+
   if (search) {
     const term = search.trim();
     query.$or = [
@@ -38,6 +55,8 @@ export async function GET(req: NextRequest) {
       { subject: { $regex: term, $options: "i" } },
       { referenceId: { $regex: term, $options: "i" } },
       { resendMessageId: { $regex: term, $options: "i" } },
+      { providerMessageId: { $regex: term, $options: "i" } },
+      { sender: { $regex: term, $options: "i" } },
     ];
   }
 
@@ -49,17 +68,45 @@ export async function GET(req: NextRequest) {
     bouncedCount,
     failedCount,
     openedCount,
+    clickedCount,
+    delayedCount,
+    pendingCount,
+    complaintCount,
   ] = await Promise.all([
-    EmailLog.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    EmailLog.find(query).sort({ sentAt: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
     EmailLog.countDocuments(query),
     EmailLog.countDocuments(),
-    EmailLog.countDocuments({ status: "Delivered" }),
-    EmailLog.countDocuments({ status: { $in: ["Bounced", "Complained"] } }),
+    EmailLog.countDocuments({
+      $or: [
+        { status: { $in: ["Delivered", "Opened", "Clicked"] } },
+        { "deliveryTimeline.event": { $in: ["email.delivered", "resend.delivered"] } },
+      ],
+    }),
+    EmailLog.countDocuments({
+      $or: [
+        { status: "Bounced" },
+        { "deliveryTimeline.event": { $in: ["email.bounced", "resend.bounced"] } },
+      ],
+    }),
     EmailLog.countDocuments({ status: "Failed" }),
-    EmailLog.countDocuments({ status: { $in: ["Opened", "Clicked"] } }),
+    EmailLog.countDocuments({
+      $or: [
+        { status: "Opened" },
+        { "deliveryTimeline.event": { $in: ["email.opened", "resend.opened"] } },
+      ],
+    }),
+    EmailLog.countDocuments({
+      $or: [
+        { status: "Clicked" },
+        { "deliveryTimeline.event": { $in: ["email.clicked", "resend.clicked"] } },
+      ],
+    }),
+    EmailLog.countDocuments({ status: "Delayed" }),
+    EmailLog.countDocuments({ status: { $in: ["Queued", "Sent", "Scheduled"] } }),
+    EmailLog.countDocuments({ status: "Complained" }),
   ]);
 
-  const deliveryRate = totalAll > 0 ? ((deliveredCount + openedCount) / totalAll) * 100 : 100;
+  const deliveryRate = totalAll > 0 ? (deliveredCount / totalAll) * 100 : 100;
 
   return NextResponse.json({
     success: true,
@@ -70,22 +117,30 @@ export async function GET(req: NextRequest) {
         bounced: bouncedCount,
         failed: failedCount,
         opened: openedCount,
+        clicked: clickedCount,
+        delayed: delayedCount,
+        pending: pendingCount,
+        complaints: complaintCount,
         deliveryRate: Math.round(deliveryRate * 10) / 10,
       },
-      emails: emails.map((e) => ({
+      emails: emails.map((e: any) => ({
         id: e._id.toString(),
         recipient: e.recipient,
         subject: e.subject,
         templateName: e.templateName,
         status: e.status,
+        origin: e.origin || (e.resendMessageId ? "crm" : "legacy"),
+        sender: e.sender,
         category: e.category,
         referenceId: e.referenceId,
         resendMessageId: e.resendMessageId,
+        providerMessageId: e.providerMessageId,
         relatedEntityType: e.relatedEntityType,
         relatedEntityId: e.relatedEntityId,
         errorMessage: e.errorMessage,
         deliveryTimeline: e.deliveryTimeline || [],
-        sentAt: e.sentAt,
+        metadata: e.metadata || {},
+        sentAt: e.sentAt || e.createdAt,
         createdAt: e.createdAt,
       })),
       pagination: {

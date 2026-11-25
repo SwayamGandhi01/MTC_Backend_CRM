@@ -10,9 +10,11 @@ export interface IEmailLog extends Document {
   recipient: string;
   subject: string;
   templateName: string;
-  status: "Sent" | "Failed" | "Queued" | "Delivered" | "Delayed" | "Bounced" | "Complained" | "Opened" | "Clicked";
+  status: "Sent" | "Failed" | "Queued" | "Delivered" | "Delayed" | "Bounced" | "Complained" | "Opened" | "Clicked" | "Scheduled";
+  origin: "crm" | "resend_import" | "legacy";
   referenceId?: string;
   resendMessageId?: string;
+  providerMessageId?: string;
   category?: "customer" | "admin" | "auth" | "system";
   relatedEntityType?: "appointment" | "enquiry" | "callback" | "user" | "customer";
   relatedEntityId?: string;
@@ -55,8 +57,14 @@ const EmailLogSchema = new Schema<IEmailLog>(
     },
     status: {
       type: String,
-      enum: ["Sent", "Failed", "Queued", "Delivered", "Delayed", "Bounced", "Complained", "Opened", "Clicked"],
+      enum: ["Sent", "Failed", "Queued", "Delivered", "Delayed", "Bounced", "Complained", "Opened", "Clicked", "Scheduled"],
       default: "Sent",
+      index: true,
+    },
+    origin: {
+      type: String,
+      enum: ["crm", "resend_import", "legacy"],
+      default: "crm",
       index: true,
     },
     referenceId: {
@@ -64,6 +72,12 @@ const EmailLogSchema = new Schema<IEmailLog>(
       index: true,
     },
     resendMessageId: {
+      type: String,
+      index: true,
+      unique: true,
+      sparse: true,
+    },
+    providerMessageId: {
       type: String,
       index: true,
       sparse: true,
@@ -113,6 +127,7 @@ const EmailLogSchema = new Schema<IEmailLog>(
 
 EmailLogSchema.index({ createdAt: -1 });
 EmailLogSchema.index({ status: 1, createdAt: -1 });
+EmailLogSchema.index({ origin: 1, createdAt: -1 });
 EmailLogSchema.index({ relatedEntityType: 1, relatedEntityId: 1 });
 
 export const EmailLog: Model<IEmailLog> =

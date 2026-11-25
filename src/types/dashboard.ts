@@ -53,13 +53,14 @@ export interface RecentEmailActivityItem {
   recipient: string;
   subject: string;
   templateName: string;
+  origin?: "crm" | "resend_import" | "legacy";
   relatedRecord?: {
     type?: "appointment" | "enquiry" | "callback" | "user" | "customer";
     id?: string;
     referenceId?: string;
   };
   sentAt: string;
-  status: "Sent" | "Failed" | "Queued" | "Delivered" | "Delayed" | "Bounced" | "Complained" | "Opened" | "Clicked";
+  status: "Sent" | "Failed" | "Queued" | "Delivered" | "Delayed" | "Bounced" | "Complained" | "Opened" | "Clicked" | "Scheduled" | string;
   resendMessageId?: string;
   lastEventAt?: string;
 }

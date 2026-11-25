@@ -18,7 +18,9 @@ export function formatUKDateTime(dateString: string): string {
       minute: "2-digit",
       hour12: true,
       timeZone: "Europe/London",
-    }).format(d);
+    })
+      .format(d)
+      .replace(/\u202f/g, " ");
   } catch {
     return dateString;
   }
@@ -34,7 +36,9 @@ export function formatUKDate(dateString: string): string {
       month: "short",
       year: "numeric",
       timeZone: "Europe/London",
-    }).format(d);
+    })
+      .format(d)
+      .replace(/\u202f/g, " ");
   } catch {
     return dateString;
   }

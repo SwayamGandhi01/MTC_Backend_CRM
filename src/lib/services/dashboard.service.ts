@@ -113,7 +113,7 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
               $match: {
                 $or: [
                   { status: { $in: ["Delivered", "Opened", "Clicked"] } },
-                  { "deliveryTimeline.event": "email.delivered" },
+                  { "deliveryTimeline.event": { $in: ["email.delivered", "resend.delivered"] } },
                 ],
               },
             },
@@ -124,21 +124,21 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
               $match: {
                 $or: [
                   { status: "Bounced" },
-                  { "deliveryTimeline.event": "email.bounced" },
+                  { "deliveryTimeline.event": { $in: ["email.bounced", "resend.bounced"] } },
                 ],
               },
             },
             { $count: "count" },
           ],
           failed: [{ $match: { status: "Failed" } }, { $count: "count" }],
-          pending: [{ $match: { status: { $in: ["Queued", "Sent"] } } }, { $count: "count" }],
+          pending: [{ $match: { status: { $in: ["Queued", "Sent", "Scheduled"] } } }, { $count: "count" }],
           delayed: [{ $match: { status: "Delayed" } }, { $count: "count" }],
           complaints: [
             {
               $match: {
                 $or: [
                   { status: "Complained" },
-                  { "deliveryTimeline.event": "email.complained" },
+                  { "deliveryTimeline.event": { $in: ["email.complained", "resend.complained"] } },
                 ],
               },
             },
@@ -149,7 +149,7 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
               $match: {
                 $or: [
                   { status: "Opened" },
-                  { "deliveryTimeline.event": "email.opened" },
+                  { "deliveryTimeline.event": { $in: ["email.opened", "resend.opened"] } },
                 ],
               },
             },
@@ -160,7 +160,7 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
               $match: {
                 $or: [
                   { status: "Clicked" },
-                  { "deliveryTimeline.event": "email.clicked" },
+                  { "deliveryTimeline.event": { $in: ["email.clicked", "resend.clicked"] } },
                 ],
               },
             },
@@ -350,6 +350,7 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
     recipient: maskEmail(e.recipient || ""),
     subject: e.subject || "",
     templateName: e.templateName || "custom",
+    origin: e.origin || (e.resendMessageId ? "crm" : "legacy"),
     relatedRecord: e.relatedEntityType
       ? {
           type: e.relatedEntityType,

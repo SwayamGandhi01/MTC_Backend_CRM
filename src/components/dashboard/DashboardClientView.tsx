@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import dynamic from "next/dynamic";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { EmailPerformanceSection } from "@/components/dashboard/EmailPerformanceSection";
@@ -10,19 +9,7 @@ import { DashboardOverviewData } from "@/types/dashboard";
 import { AlertCircle, RefreshCw, Database, AlertTriangle, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Recharts requires DOM layout measurement; disable SSR to eliminate hydration mismatch #418
-const AppointmentChart = dynamic(
-  () => import("@/components/dashboard/AppointmentChart").then((m) => m.AppointmentChart),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="col-span-full xl:col-span-8 rounded-2xl bg-white border border-slate-200/80 p-6 shadow-xs animate-pulse">
-        <div className="h-5 w-48 bg-slate-200 rounded mb-4" />
-        <div className="h-[310px] w-full bg-slate-50 rounded-xl" />
-      </div>
-    ),
-  }
-);
+import { AppointmentChart } from "@/components/dashboard/AppointmentChart";
 
 interface DashboardClientViewProps {
   initialData: DashboardOverviewData | null;
