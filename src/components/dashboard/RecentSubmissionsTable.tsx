@@ -147,7 +147,7 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
                 <TableRow key={item.id} className="hover:bg-slate-50/80">
                   <TableCell>
                     <div className="font-bold text-slate-900">{item.customerName}</div>
-                    <div className="text-xs font-medium text-slate-400 font-mono">
+                    <div className="text-xs font-medium text-slate-400 font-mono" suppressHydrationWarning>
                       {item.id} • {formatUKDateTime(item.submittedAt)}
                     </div>
                   </TableCell>

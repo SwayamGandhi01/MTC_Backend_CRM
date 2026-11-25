@@ -19,7 +19,13 @@ interface AppointmentChartProps {
 }
 
 export const AppointmentChart: React.FC<AppointmentChartProps> = ({ data, loading = false }) => {
-  if (loading || !data) {
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted || loading || !data) {
     return (
       <Card className="col-span-full xl:col-span-8">
         <CardHeader className="flex flex-row items-center justify-between pb-4">

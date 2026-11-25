@@ -7,7 +7,9 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatUKDateTime(dateString: string): string {
   try {
+    if (!dateString) return "—";
     const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
     return new Intl.DateTimeFormat("en-GB", {
       day: "2-digit",
       month: "short",
@@ -15,6 +17,7 @@ export function formatUKDateTime(dateString: string): string {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Europe/London",
     }).format(d);
   } catch {
     return dateString;
@@ -23,11 +26,14 @@ export function formatUKDateTime(dateString: string): string {
 
 export function formatUKDate(dateString: string): string {
   try {
+    if (!dateString) return "—";
     const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
     return new Intl.DateTimeFormat("en-GB", {
       day: "numeric",
       month: "short",
       year: "numeric",
+      timeZone: "Europe/London",
     }).format(d);
   } catch {
     return dateString;

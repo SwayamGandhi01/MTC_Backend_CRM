@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { connectToDatabase } from "@/lib/db/mongodb";
 import { EmailLog, IEmailLog } from "@/models/EmailLog";
+import { publishRealtimeDashboardEvent } from "@/lib/events/business-events";
 import {
   renderAppointmentConfirmationEmail,
   renderAppointmentStatusChangeEmail,
@@ -69,7 +70,7 @@ class ResendEmailService {
 
         const resendMessageId = data.id;
 
-        await EmailLog.create({
+        const logRecord = await EmailLog.create({
           recipient: params.to,
           subject: params.subject,
           templateName: params.templateName,
@@ -90,11 +91,30 @@ class ResendEmailService {
           ],
         });
 
+        // Broadcast real-time email dispatched event
+        try {
+          await publishRealtimeDashboardEvent({
+            eventId: `evt_email_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            eventType: "email.sent",
+            entityType: "email",
+            entityId: logRecord._id.toString(),
+            payload: {
+              resendMessageId,
+              status: "Sent",
+              recipient: params.to,
+              subject: params.subject,
+              templateName: params.templateName,
+              referenceId: params.referenceId,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch {}
+
         return { success: true, messageId: resendMessageId };
       } catch (err: any) {
         console.error(`[Resend Email Error] To: ${params.to} | Subject: ${params.subject}:`, err?.message || err);
 
-        await EmailLog.create({
+        const failRecord = await EmailLog.create({
           recipient: params.to,
           subject: params.subject,
           templateName: params.templateName,
@@ -115,6 +135,23 @@ class ResendEmailService {
           ],
         });
 
+        try {
+          await publishRealtimeDashboardEvent({
+            eventId: `evt_email_failed_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            eventType: "email.failed",
+            entityType: "email",
+            entityId: failRecord._id.toString(),
+            payload: {
+              status: "Failed",
+              recipient: params.to,
+              subject: params.subject,
+              templateName: params.templateName,
+              referenceId: params.referenceId,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch {}
+
         return { success: false, error: err?.message || String(err) };
       }
     }
@@ -123,7 +160,7 @@ class ResendEmailService {
     console.log(`[Email Simulation] To: ${params.to} | Template: ${params.templateName} | Subject: ${params.subject}`);
     const simulatedId = `msg_sim_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-    await EmailLog.create({
+    const simRecord = await EmailLog.create({
       recipient: params.to,
       subject: params.subject,
       templateName: params.templateName,
@@ -144,6 +181,24 @@ class ResendEmailService {
         },
       ],
     });
+
+    try {
+      await publishRealtimeDashboardEvent({
+        eventId: `evt_email_sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        eventType: "email.sent",
+        entityType: "email",
+        entityId: simRecord._id.toString(),
+        payload: {
+          resendMessageId: simulatedId,
+          status: "Sent",
+          recipient: params.to,
+          subject: params.subject,
+          templateName: params.templateName,
+          referenceId: params.referenceId,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch {}
 
     return { success: true, messageId: simulatedId, simulated: true };
   }
@@ -229,4 +284,5 @@ class ResendEmailService {
 }
 
 export const emailService = new ResendEmailService();
+export const resendEmailService = emailService;
 export default emailService;

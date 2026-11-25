@@ -1,13 +1,28 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { AppointmentChart } from "@/components/dashboard/AppointmentChart";
 import { QuickActions } from "@/components/dashboard/QuickActions";
+import { EmailPerformanceSection } from "@/components/dashboard/EmailPerformanceSection";
 import { RecentSubmissionsTable } from "@/components/dashboard/RecentSubmissionsTable";
 import { DashboardOverviewData } from "@/types/dashboard";
 import { AlertCircle, RefreshCw, Database, AlertTriangle, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// Recharts requires DOM layout measurement; disable SSR to eliminate hydration mismatch #418
+const AppointmentChart = dynamic(
+  () => import("@/components/dashboard/AppointmentChart").then((m) => m.AppointmentChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="col-span-full xl:col-span-8 rounded-2xl bg-white border border-slate-200/80 p-6 shadow-xs animate-pulse">
+        <div className="h-5 w-48 bg-slate-200 rounded mb-4" />
+        <div className="h-[310px] w-full bg-slate-50 rounded-xl" />
+      </div>
+    ),
+  }
+);
 
 interface DashboardClientViewProps {
   initialData: DashboardOverviewData | null;
@@ -90,6 +105,10 @@ export const DashboardClientView: React.FC<DashboardClientViewProps> = ({
               label = `New quote enquiry received (${ref || "ENQ"})`;
             } else if (eventName.includes("callback")) {
               label = `New callback request added to queue (${ref || "CB"})`;
+            } else if (eventName.includes("email")) {
+              const status = parsed.metadata?.status || "delivered";
+              const template = parsed.metadata?.templateName || "notification";
+              label = `📧 Transactional Email ${status.toLowerCase()}: ${template}`;
             }
 
             setRealtimeNotice(label);
@@ -111,6 +130,15 @@ export const DashboardClientView: React.FC<DashboardClientViewProps> = ({
         eventSource.addEventListener("callback.created", handleRealtimeEvent);
         eventSource.addEventListener("appointment.updated", handleRealtimeEvent);
         eventSource.addEventListener("appointment.status_changed", handleRealtimeEvent);
+        eventSource.addEventListener("email.sent", handleRealtimeEvent);
+        eventSource.addEventListener("email.delivered", handleRealtimeEvent);
+        eventSource.addEventListener("email.bounced", handleRealtimeEvent);
+        eventSource.addEventListener("email.complained", handleRealtimeEvent);
+        eventSource.addEventListener("email.failed", handleRealtimeEvent);
+        eventSource.addEventListener("email.delayed", handleRealtimeEvent);
+        eventSource.addEventListener("email.opened", handleRealtimeEvent);
+        eventSource.addEventListener("email.clicked", handleRealtimeEvent);
+        eventSource.addEventListener("email.status_updated", handleRealtimeEvent);
 
         eventSource.onerror = () => {
           if (!isMounted) return;
@@ -165,7 +193,7 @@ export const DashboardClientView: React.FC<DashboardClientViewProps> = ({
   const pendingCount = data?.kpis?.pendingAppointments || 0;
 
   return (
-    <div className="space-y-8 pb-10 max-w-7xl">
+    <div className="space-y-8 pb-10 max-w-7xl" suppressHydrationWarning>
       {/* Top action row */}
       <div className="flex items-center justify-between">
         <div>
@@ -269,6 +297,14 @@ export const DashboardClientView: React.FC<DashboardClientViewProps> = ({
         <AppointmentChart data={activityTrends} loading={!data && isRefreshing} />
         <QuickActions />
       </div>
+
+      {/* Resend Email Performance & Delivery Section */}
+      <EmailPerformanceSection
+        data={data?.emailPerformance}
+        loading={!data && isRefreshing}
+        error={error}
+        onRetry={() => refreshStats(false)}
+      />
 
       {/* Recent Submissions Live Queue */}
       <div className="grid grid-cols-1 gap-6">

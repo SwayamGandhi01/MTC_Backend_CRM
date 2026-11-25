@@ -31,6 +31,44 @@ export interface RecentSubmissionItem {
   timingSlot?: string;
 }
 
+export interface EmailMetrics {
+  totalSent: number;
+  delivered: number;
+  bounced: number;
+  failed: number;
+  pending: number;
+  delayed: number;
+  complaints: number;
+  deliveryRate: number; // e.g. 98.5
+  bounceRate: number; // e.g. 1.2
+  opens?: number;
+  clicks?: number;
+  openRate?: number;
+  clickRate?: number;
+  hasTrackingData: boolean;
+}
+
+export interface RecentEmailActivityItem {
+  id: string;
+  recipient: string;
+  subject: string;
+  templateName: string;
+  relatedRecord?: {
+    type?: "appointment" | "enquiry" | "callback" | "user" | "customer";
+    id?: string;
+    referenceId?: string;
+  };
+  sentAt: string;
+  status: "Sent" | "Failed" | "Queued" | "Delivered" | "Delayed" | "Bounced" | "Complained" | "Opened" | "Clicked";
+  resendMessageId?: string;
+  lastEventAt?: string;
+}
+
+export interface EmailPerformanceData {
+  metrics: EmailMetrics;
+  recentEmails: RecentEmailActivityItem[];
+}
+
 export interface DashboardOverviewData {
   kpis: {
     totalLeads: number;
@@ -43,4 +81,5 @@ export interface DashboardOverviewData {
   metrics: KpiMetric[];
   activityTrends: ActivityDataPoint[];
   recentSubmissions: RecentSubmissionItem[];
+  emailPerformance?: EmailPerformanceData;
 }

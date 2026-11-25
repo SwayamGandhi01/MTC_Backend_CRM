@@ -3,7 +3,32 @@ import { Appointment } from "@/models/Appointment";
 import { Enquiry } from "@/models/Enquiry";
 import { CallbackRequest } from "@/models/CallbackRequest";
 import { Customer } from "@/models/Customer";
-import { DashboardOverviewData, ActivityDataPoint, RecentSubmissionItem, KpiMetric } from "@/types/dashboard";
+import { EmailLog } from "@/models/EmailLog";
+import {
+  DashboardOverviewData,
+  ActivityDataPoint,
+  RecentSubmissionItem,
+  KpiMetric,
+  EmailMetrics,
+  RecentEmailActivityItem,
+  EmailPerformanceData,
+} from "@/types/dashboard";
+
+/**
+ * Masks recipient email address for privacy and RBAC compliance (e.g. g****2@domain.com).
+ */
+function maskEmail(email: string): string {
+  if (!email || typeof email !== "string") return "";
+  const parts = email.split("@");
+  if (parts.length !== 2) return email;
+  const [user, domain] = parts;
+  if (user.length <= 2) {
+    return `${user[0]}*@${domain}`;
+  }
+  const first = user[0];
+  const last = user[user.length - 1];
+  return `${first}${"*".repeat(Math.min(user.length - 2, 4))}${last}@${domain}`;
+}
 
 /**
  * Authoritative Central Service for MTC CRM Dashboard Operations.
@@ -38,6 +63,8 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
     weekAppointments,
     weekEnquiries,
     weekCallbacks,
+    emailStatsAgg,
+    recentEmailLogs,
   ] = await Promise.all([
     // 1. Pending bookings awaiting dispatch
     Appointment.countDocuments({ status: "pending" }),
@@ -76,6 +103,74 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
     CallbackRequest.find({ createdAt: { $gte: sevenDaysAgo } })
       .select("createdAt")
       .lean(),
+    // 15. Real-time Email Performance Aggregation from EmailLog
+    EmailLog.aggregate([
+      {
+        $facet: {
+          total: [{ $count: "count" }],
+          delivered: [
+            {
+              $match: {
+                $or: [
+                  { status: { $in: ["Delivered", "Opened", "Clicked"] } },
+                  { "deliveryTimeline.event": "email.delivered" },
+                ],
+              },
+            },
+            { $count: "count" },
+          ],
+          bounced: [
+            {
+              $match: {
+                $or: [
+                  { status: "Bounced" },
+                  { "deliveryTimeline.event": "email.bounced" },
+                ],
+              },
+            },
+            { $count: "count" },
+          ],
+          failed: [{ $match: { status: "Failed" } }, { $count: "count" }],
+          pending: [{ $match: { status: { $in: ["Queued", "Sent"] } } }, { $count: "count" }],
+          delayed: [{ $match: { status: "Delayed" } }, { $count: "count" }],
+          complaints: [
+            {
+              $match: {
+                $or: [
+                  { status: "Complained" },
+                  { "deliveryTimeline.event": "email.complained" },
+                ],
+              },
+            },
+            { $count: "count" },
+          ],
+          opens: [
+            {
+              $match: {
+                $or: [
+                  { status: "Opened" },
+                  { "deliveryTimeline.event": "email.opened" },
+                ],
+              },
+            },
+            { $count: "count" },
+          ],
+          clicks: [
+            {
+              $match: {
+                $or: [
+                  { status: "Clicked" },
+                  { "deliveryTimeline.event": "email.clicked" },
+                ],
+              },
+            },
+            { $count: "count" },
+          ],
+        },
+      },
+    ]),
+    // 16. Latest 5 transactional email records for the dashboard
+    EmailLog.find().sort({ sentAt: -1, createdAt: -1 }).limit(5).lean(),
   ]);
 
   // 15. Calculate actual 7-day velocity chart data
@@ -217,6 +312,64 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
     },
   ];
 
+  // 17. Calculate Email Performance Metrics & Recent Email Activity
+  const facet = emailStatsAgg?.[0] || {};
+  const totalSent = facet.total?.[0]?.count || 0;
+  const delivered = facet.delivered?.[0]?.count || 0;
+  const bounced = facet.bounced?.[0]?.count || 0;
+  const failed = facet.failed?.[0]?.count || 0;
+  const pending = facet.pending?.[0]?.count || 0;
+  const delayed = facet.delayed?.[0]?.count || 0;
+  const complaints = facet.complaints?.[0]?.count || 0;
+  const opens = facet.opens?.[0]?.count || 0;
+  const clicks = facet.clicks?.[0]?.count || 0;
+
+  const deliveryRate = totalSent > 0 ? Number(((delivered / totalSent) * 100).toFixed(1)) : 0;
+  const bounceRate = totalSent > 0 ? Number(((bounced / totalSent) * 100).toFixed(1)) : 0;
+  const hasTrackingData = opens > 0 || clicks > 0;
+
+  const emailMetrics: EmailMetrics = {
+    totalSent,
+    delivered,
+    bounced,
+    failed,
+    pending,
+    delayed,
+    complaints,
+    deliveryRate,
+    bounceRate,
+    opens,
+    clicks,
+    openRate: delivered > 0 ? Number(((opens / delivered) * 100).toFixed(1)) : 0,
+    clickRate: delivered > 0 ? Number(((clicks / delivered) * 100).toFixed(1)) : 0,
+    hasTrackingData,
+  };
+
+  const recentEmails: RecentEmailActivityItem[] = (recentEmailLogs || []).map((e: any) => ({
+    id: e._id.toString(),
+    recipient: maskEmail(e.recipient || ""),
+    subject: e.subject || "",
+    templateName: e.templateName || "custom",
+    relatedRecord: e.relatedEntityType
+      ? {
+          type: e.relatedEntityType,
+          id: e.relatedEntityId,
+          referenceId: e.referenceId,
+        }
+      : undefined,
+    sentAt: (e.sentAt ? new Date(e.sentAt) : (e.createdAt ? new Date(e.createdAt) : new Date(0))).toISOString(),
+    status: e.status || "Sent",
+    resendMessageId: e.resendMessageId
+      ? `${e.resendMessageId.slice(0, 10)}...`
+      : undefined,
+    lastEventAt: e.lastEventAt ? new Date(e.lastEventAt).toISOString() : undefined,
+  }));
+
+  const emailPerformance: EmailPerformanceData = {
+    metrics: emailMetrics,
+    recentEmails,
+  };
+
   return {
     kpis: {
       totalLeads: totalAppointments + totalEnquiries + pendingCallbacks,
@@ -229,6 +382,7 @@ export async function getDashboardOverviewData(): Promise<DashboardOverviewData>
     metrics,
     activityTrends,
     recentSubmissions,
+    emailPerformance,
   };
 }
 

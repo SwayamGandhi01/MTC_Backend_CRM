@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { connectToDatabase } from "@/lib/db/mongodb";
 import { EmailLog } from "@/models/EmailLog";
+import { publishRealtimeDashboardEvent } from "@/lib/events/business-events";
 
 export const dynamic = "force-dynamic";
 
@@ -149,37 +150,71 @@ export async function POST(req: NextRequest) {
       mappedStatus = null;
   }
 
-  // 4. Update EmailLog record idempotently
-  const emailLog = await EmailLog.findOne({ resendMessageId });
+  // 4. Update EmailLog record idempotently & handle out-of-order events
+  const svixIdHeader = req.headers.get("svix-id");
+  let emailLog = await EmailLog.findOne({ resendMessageId });
+
+  // Status priority hierarchy for progression
+  const STATUS_RANKS: Record<string, number> = {
+    Queued: 1,
+    Sent: 2,
+    Delayed: 2,
+    Delivered: 3,
+    Opened: 4,
+    Clicked: 5,
+  };
+  const TERMINAL_FAILURE_STATUSES = ["Bounced", "Complained", "Failed"];
 
   if (emailLog) {
-    // Check if this event was already logged
-    const alreadyLogged = emailLog.deliveryTimeline.some(
-      (e) => e.event === type && Math.abs(new Date(e.timestamp).getTime() - eventTimestamp.getTime()) < 1000
+    // 4a. Idempotency check: verify if this specific webhook event has already been recorded
+    const isDuplicate = emailLog.deliveryTimeline.some(
+      (e) =>
+        (svixIdHeader && e.data?.svixId === svixIdHeader) ||
+        (e.event === type && Math.abs(new Date(e.timestamp).getTime() - eventTimestamp.getTime()) < 1000)
     );
 
-    if (!alreadyLogged) {
-      emailLog.deliveryTimeline.push({
-        event: type,
-        timestamp: eventTimestamp,
-        data: data || {},
+    if (isDuplicate) {
+      return NextResponse.json({
+        success: true,
+        message: `Duplicate ${type} event ignored for ${resendMessageId}`,
+        duplicate: true,
       });
     }
 
-    // Do not downgrade terminal status (e.g., Delivered/Bounced/Complained shouldn't be reverted by delayed Sent event)
-    const terminalStatuses = ["Delivered", "Bounced", "Complained"];
+    // Record the verified event in the delivery timeline
+    emailLog.deliveryTimeline.push({
+      event: type,
+      timestamp: eventTimestamp,
+      data: {
+        ...(data || {}),
+        svixId: svixIdHeader || undefined,
+      },
+    });
+
+    // 4b. Out-of-order handling: calculate whether mappedStatus should update document status
     if (mappedStatus) {
-      if (!terminalStatuses.includes(emailLog.status) || terminalStatuses.includes(mappedStatus)) {
+      const isCurrentFailure = TERMINAL_FAILURE_STATUSES.includes(emailLog.status);
+      const isNewFailure = TERMINAL_FAILURE_STATUSES.includes(mappedStatus);
+
+      if (isNewFailure) {
+        // Failure states always take priority
         emailLog.status = mappedStatus;
+      } else if (!isCurrentFailure) {
+        // Compare progression ranks to avoid downgrading (e.g., Opened -> Delivered or Delivered -> Sent)
+        const currentRank = STATUS_RANKS[emailLog.status] || 0;
+        const newRank = STATUS_RANKS[mappedStatus] || 0;
+        if (newRank >= currentRank) {
+          emailLog.status = mappedStatus;
+        }
       }
     }
 
     emailLog.lastEventAt = new Date();
     await emailLog.save();
   } else {
-    // Create standalone email record if dispatched prior or external
+    // 4c. Create standalone email record if dispatched prior or external
     if (mappedStatus) {
-      await EmailLog.create({
+      emailLog = await EmailLog.create({
         recipient: Array.isArray(data.to) ? data.to[0] : (data.to || "unknown@recipient.com"),
         subject: data.subject || "Notification",
         templateName: "external-resend",
@@ -191,15 +226,40 @@ export async function POST(req: NextRequest) {
           {
             event: type,
             timestamp: eventTimestamp,
-            data: data || {},
+            data: {
+              ...(data || {}),
+              svixId: svixIdHeader || undefined,
+            },
           },
         ],
       });
     }
   }
 
+  // 5. Broadcast real-time dashboard notification
+  try {
+    await publishRealtimeDashboardEvent({
+      eventId: `evt_resend_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      eventType: type || "email.status_updated",
+      entityType: "email",
+      entityId: emailLog ? emailLog._id.toString() : resendMessageId,
+      payload: {
+        resendMessageId,
+        status: emailLog ? emailLog.status : mappedStatus,
+        recipient: emailLog ? emailLog.recipient : (Array.isArray(data.to) ? data.to[0] : (data.to || "")),
+        subject: emailLog ? emailLog.subject : (data.subject || ""),
+        templateName: emailLog ? emailLog.templateName : "external-resend",
+        referenceId: emailLog?.referenceId,
+        timestamp: eventTimestamp.toISOString(),
+      },
+    });
+  } catch (broadcastErr: any) {
+    console.warn("[Resend Webhook] Failed to broadcast real-time event:", broadcastErr?.message);
+  }
+
   return NextResponse.json({
     success: true,
     message: `Processed ${type} event for ${resendMessageId}`,
+    status: emailLog ? emailLog.status : mappedStatus,
   });
 }
